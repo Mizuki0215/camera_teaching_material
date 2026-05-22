@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PolyU Multi-Screen Probability Lab</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #0c0c0e;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        /* Virtual Joystick - Bottom Right */
+        
+        #joystick-container {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 130px;
+            height: 130px;
+            background: rgba(15, 15, 20, 0.75);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        }
+        
+        #joystick-knob {
+            width: 44px;
+            height: 44px;
+            background: radial-gradient(circle, #f43f5e 0%, #be123c 100%);
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+        }
+        /* Global System Hub Panel Overlay */
+        
+        #global-hub-modal {
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transform: scale(0.95);
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        #global-hub-modal.active {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        /* 3D Floating Action Button */
+        
+        #floating-action-hud {
+            position: absolute;
+            z-index: 40;
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="text-white">
+
+    <!-- WebGL Viewport -->
+    <div id="canvas-container"></div>
+
+    <!-- Screen-Projected Floating Coin Toss Button (Follows the coin in 3D space) -->
+    <div id="floating-action-hud">
+        <button id="btn-station-flip" class="pointer-events-auto flex items-center space-x-1.5 bg-zinc-900/95 border border-zinc-700 hover:border-emerald-500 hover:bg-zinc-800 text-white px-3 py-2 rounded-xl text-xs font-black shadow-2xl transition-all active:scale-95">
+            <i class="fa-solid fa-rotate text-emerald-400 animate-spin-slow"></i>
+            <span>Flip Coin</span>
+        </button>
+    </div>
+
+    <!-- Left Side Viewport Zoom Controls -->
+    <div class="absolute left-6 top-1/2 -translate-y-1/2 z-40 bg-black/80 border border-white/10 rounded-full px-2 py-4 flex flex-col items-center space-y-3 pointer-events-auto shadow-2xl backdrop-blur-md">
+        <button id="btn-zoom-in" class="w-10 h-10 rounded-full bg-white/5 hover:bg-[#10b981]/20 hover:border-[#10b981] border border-white/10 flex items-center justify-center transition-all active:scale-90" title="Zoom In">
+            <i class="fa-solid fa-magnifying-glass-plus text-base text-gray-300 hover:text-white"></i>
+        </button>
+        <span class="text-[9px] font-bold text-gray-400 font-mono tracking-widest uppercase rotate-90 my-2">Zoom</span>
+        <button id="btn-zoom-out" class="w-10 h-10 rounded-full bg-white/5 hover:bg-[#be123c]/20 hover:border-[#be123c] border border-white/10 flex items-center justify-center transition-all active:scale-90" title="Zoom Out">
+            <i class="fa-solid fa-magnifying-glass-minus text-base text-gray-300 hover:text-white"></i>
+        </button>
+    </div>
+
+    <!-- Top Left Identity Banner -->
+    <header class="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-45 bg-gradient-to-b from-black/90 to-transparent pointer-events-none">
+        <div class="flex items-center space-x-3 pointer-events-auto">
+            <div class="w-10 h-10 rounded-lg bg-[#be123c] flex items-center justify-center font-bold text-lg shadow-lg border border-red-500/20">
+                P
+            </div>
+            <div>
+                <h1 class="text-base font-bold tracking-wider text-white">PolyU XR Probability Lab</h1>
+                <p class="text-xs text-gray-400 font-medium font-mono">Distribution Student Corner</p>
+            </div>
+        </div>
+
+        <!-- Top Right Vertical Actions Toolbar -->
+        <div class="flex flex-col items-center space-y-3 pointer-events-auto">
+            <!-- User Guide Button -->
+            <button id="btn-open-guide" class="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-black/60 border border-white/20 hover:border-[#be123c] hover:bg-[#be123c]/20 transition-all group active:scale-95 shadow-lg">
+                <i class="fa-solid fa-circle-info text-lg text-gray-300 group-hover:text-[#f43f5e]"></i>
+                <span class="text-[9px] mt-0.5 text-gray-400 group-hover:text-white">Guide</span>
+            </button>
+
+            <!-- System Hub Button -->
+            <button id="btn-open-hub" class="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-black/60 border border-white/20 hover:border-[#10b981] hover:bg-[#10b981]/20 transition-all group active:scale-95 shadow-lg">
+                <i class="fa-solid fa-server text-lg text-gray-300 group-hover:text-[#10b981]"></i>
+                <span class="text-[9px] mt-0.5 text-gray-400 group-hover:text-white">Console</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Global System Hub Console Panel -->
+    <div id="global-hub-modal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="w-[380px] max-w-full bg-[#121216] border border-white/10 rounded-2xl p-5 shadow-2xl relative">
+            <button id="btn-close-hub" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+
+            <div class="flex items-center space-x-2 pb-3 mb-4 border-b border-white/10">
+                <i class="fa-solid fa-gears text-[#10b981] text-lg"></i>
+                <h2 class="font-bold text-sm tracking-wide text-gray-100">Global System Hub</h2>
+            </div>
+
+            <p class="text-xs text-gray-400 leading-relaxed mb-4">
+                Configure experiment values and monitor localized student triggers globally.
+            </p>
+
+            <div class="bg-white/5 p-3 rounded-xl border border-white/5 space-y-2.5 mb-4 text-xs">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">Trigger Status:</span>
+                    <span id="current-station-name" class="font-bold text-amber-400">Not Active</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">Coordinates (X, Z):</span>
+                    <span id="player-coord-text" class="font-mono text-gray-300">X: 0.0, Z: 4.2</span>
+                </div>
+                <div class="flex justify-between items-center border-t border-white/5 pt-2">
+                    <span class="text-gray-400">Corner 1 Flip Counts:</span>
+                    <span id="hub-flip-count" class="font-mono text-emerald-400 font-bold">0 flips</span>
+                </div>
+            </div>
+
+            <!-- Simulation configurations -->
+            <div class="space-y-3 mb-5">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-500 block">Binomial Trial Options</span>
+                <div>
+                    <div class="flex justify-between text-xs text-gray-300 mb-1">
+                        <span>Tosses per Trial (N)</span>
+                        <span id="label-n-val" class="font-bold text-emerald-400">10 times</span>
+                    </div>
+                    <input type="range" id="input-n-value" min="5" max="15" value="10" class="w-full accent-[#10b981] cursor-pointer bg-white/10 h-1.5 rounded-lg">
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs text-gray-300 mb-1">
+                        <span>Heads Probability (P)</span>
+                        <span id="label-p-val" class="font-bold text-blue-400">0.50</span>
+                    </div>
+                    <input type="range" id="input-p-value" min="0.1" max="0.9" step="0.05" value="0.50" class="w-full accent-blue-500 cursor-pointer bg-white/10 h-1.5 rounded-lg">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-2">
+                <button id="btn-reset-globals" class="w-full py-2 bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-950 text-xs font-semibold rounded-lg transition-all flex items-center justify-center space-x-1">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>Reset All Datasets</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Joystick and Walk Navigation Controls -->
+    <div id="joystick-container">
+        <div id="joystick-knob"></div>
+    </div>
+
+    <!-- 95% Sized Tutorial Instruction Panel -->
+    <div id="user-guide-overlay" class="fixed inset-0 bg-black/95 backdrop-blur-lg z-50 flex items-center justify-center p-4">
+        <div class="w-[95%] h-[95%] bg-[#0f0f11] border-2 border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-700 via-amber-500 to-red-800"></div>
+
+            <div class="p-6 border-b border-white/10 flex justify-between items-center bg-black/40">
+                <div class="flex items-center space-x-3">
+                    <span class="px-2.5 py-1 rounded bg-[#be123c] text-white font-bold text-xs uppercase tracking-widest font-mono">Guide</span>
+                    <h2 class="text-xl font-bold tracking-wide">PolyU Multi-Screen Interactive Classroom</h2>
+                </div>
+                <div class="text-sm text-gray-400 font-mono" id="guide-page-indicator">Step 1 / 2</div>
+            </div>
+
+            <!-- Page views -->
+            <div class="flex-1 overflow-y-auto p-8 flex flex-col justify-center">
+                <!-- STEP 1 -->
+                <div id="guide-step-1" class="guide-step flex flex-col md:flex-row items-center justify-around gap-8 h-full">
+                    <div class="max-w-md space-y-5">
+                        <div class="flex items-center space-x-3">
+                            <span class="w-8 h-8 rounded-full bg-[#be123c] text-white flex items-center justify-center font-bold">1</span>
+                            <h3 class="text-2xl font-bold text-white">Navigation & Perspective</h3>
+                        </div>
+                        <ul class="text-gray-300 text-sm space-y-3 leading-relaxed list-disc pl-5">
+                            <li>Drag your cursor or finger across <strong class="text-amber-400">any empty space</strong> to look around the high-fidelity PolyU scene.</li>
+                            <li>Use the <strong class="text-rose-500">bottom-right joystick</strong> or keyboard <strong class="text-white">W, A, S, D</strong> keys to walk.</li>
+                            <li>Toggle the left side <strong class="text-emerald-400">[ + ] or [ - ] pill buttons</strong> to smoothly zoom your camera's field-of-view!</li>
+                        </ul>
+                    </div>
+                    <div class="w-full max-w-sm bg-black/40 p-6 rounded-2xl border border-white/10 flex flex-col items-center">
+                        <svg viewBox="0 0 200 150" class="w-36 h-36 text-gray-400" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="10" y="10" width="180" height="110" rx="10" stroke="white" stroke-opacity="0.3" fill="#141416"></rect>
+                            <line x1="10" y1="65" x2="190" y2="65" stroke="white" stroke-dasharray="4" stroke-opacity="0.15"></line>
+                            <circle cx="100" cy="65" r="28" stroke="#be123c" stroke-dasharray="3"></circle>
+                            <text x="100" y="105" fill="#be123c" font-size="8" font-weight="bold" text-anchor="middle">Drag empty space = Look around</text>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- STEP 2 -->
+                <div id="guide-step-2" class="guide-step hidden flex flex-col md:flex-row items-center justify-around gap-8 h-full">
+                    <div class="max-w-md space-y-5">
+                        <div class="flex items-center space-x-3">
+                            <span class="w-8 h-8 rounded-full bg-[#be123c] text-white flex items-center justify-center font-bold">2</span>
+                            <h3 class="text-2xl font-bold text-white">Step onto Floor Sensors</h3>
+                        </div>
+                        <p class="text-gray-300 text-sm leading-relaxed">
+                            Walk directly onto the glowing <strong class="text-emerald-400">Green Floor Rings</strong> facing the desks.
+                        </p>
+                        <p class="text-gray-300 text-sm leading-relaxed">
+                            Once inside, the <strong class="text-white">LCD Wall Screen (positioned on the left of each whiteboard)</strong> will instantly power on. A floating <strong class="text-amber-400">"Flip Coin" button</strong> will hover directly
+                            above the coin in 3D space to start tossing!
+                        </p>
+                    </div>
+                    <div class="w-full max-w-sm bg-black/40 p-6 rounded-2xl border border-white/10 flex flex-col items-center">
+                        <svg viewBox="0 0 200 150" class="w-36 h-36 text-gray-400" fill="none" stroke="currentColor" stroke-width="2">
+                            <ellipse cx="100" cy="110" rx="60" ry="20" stroke="#10b981" stroke-width="3" stroke-dasharray="5,5" fill="#10b981" fill-opacity="0.1"></ellipse>
+                            <path d="M 100,20 L 100,85 M 100,85 L 95,75 M 100,85 L 105,75" stroke="#10b981" stroke-width="2"></path>
+                            <text x="100" y="55" fill="white" font-size="10" text-anchor="middle">Step into rings facing boards</text>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Toolbar -->
+            <div class="p-6 border-t border-white/10 bg-black/60 flex justify-between items-center shrink-0">
+                <button id="btn-guide-back" class="px-6 py-3 rounded-lg border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 font-semibold text-sm transition-all" disabled>
+                    Back
+                </button>
+                <div class="flex space-x-3">
+                    <button id="btn-guide-next" class="px-8 py-3 rounded-lg bg-gradient-to-r from-red-700 to-[#be123c] hover:from-red-600 hover:to-[#f43f5e] text-white font-bold text-sm transition-all">
+                        Next
+                    </button>
+                    <button id="btn-guide-start" class="hidden px-8 py-3 rounded-lg bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-500 hover:to-green-600 text-white font-bold text-sm transition-all">
+                        Start! ~
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script Block -->
+    <script>
+        // -------------------------------------------------------------
+        // 1. Global Three.js Environment Variables
+        // -------------------------------------------------------------
+        let scene, camera, renderer;
+        let lookYaw = -Math.PI / 2;
+        let lookPitch = 0;
+        let targetLookYaw = -Math.PI / 2;
+        let targetLookPitch = 0;
+        let playerPos = new THREE.Vector3(0, 1.6, 4.2); // Default stand height
+
+        const keysPressed = {};
+
+        // 3D Geometry
+        let corner1CoinMesh;
+        let isCoinFlipping = false;
+        let sensorCircles = []; // Floor sensor data
+
+        // Drag Screen Look
+        let isDraggingView = false;
+        let previousMouseX = 0,
+            previousMouseY = 0;
+        const lookSpeed = 0.0055;
+
+        //平滑視野縮放
+        let targetFov = 60;
+
+        // Joystick controls
+        const joystickContainer = document.getElementById('joystick-container');
+        const joystickKnob = document.getElementById('joystick-knob');
+        let isUsingJoystick = false;
+        let joystickStartPos = {
+            x: 0,
+            y: 0
+        };
+        let joystickMove = {
+            x: 0,
+            y: 0
+        };
+        const maxJoystickRadius = 45;
+        const playerWalkSpeed = 0.075;
+
+        // Multi-Screen display textures configurations
+        let lcdScreenContexts = [null, null, null, null];
+        let lcdScreenTextures = [null, null, null, null];
+        let wallLcdActiveStates = [false, false, false, false];
+
+        // -------------------------------------------------------------
+        // 2. Math Simulation Datasets (Corner 1)
+        // -------------------------------------------------------------
+        let binomialN = 10;
+        let coinP = 0.50;
+        let corner1Heads = 0;
+        let corner1Tails = 0;
+        let binomialHistData = {};
+
+        function initDataStructure() {
+            binomialHistData = {};
+            for (let i = 0; i <= binomialN; i++) {
+                binomialHistData[i] = 0;
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 3. User Guide Controller Steps
+        // -------------------------------------------------------------
+        let currentGuidePage = 1;
+        const maxGuidePages = 2;
+        const guideOverlay = document.getElementById('user-guide-overlay');
+        const btnOpenGuide = document.getElementById('btn-open-guide');
+        const btnGuideBack = document.getElementById('btn-guide-back');
+        const btnGuideNext = document.getElementById('btn-guide-next');
+        const btnGuideStart = document.getElementById('btn-guide-start');
+        const guideStep1 = document.getElementById('guide-step-1');
+        const guideStep2 = document.getElementById('guide-step-2');
+        const guideIndicator = document.getElementById('guide-page-indicator');
+
+        function updateGuideUI() {
+            guideIndicator.innerText = `Step ${currentGuidePage} / ${maxGuidePages}`;
+            if (currentGuidePage === 1) {
+                guideStep1.classList.remove('hidden');
+                guideStep2.classList.add('hidden');
+                btnGuideBack.disabled = true;
+                btnGuideNext.classList.remove('hidden');
+                btnGuideStart.classList.add('hidden');
+            } else if (currentGuidePage === 2) {
+                guideStep1.classList.add('hidden');
+                guideStep2.classList.remove('hidden');
+                btnGuideBack.disabled = false;
+                btnGuideNext.classList.add('hidden');
+                btnGuideStart.classList.remove('hidden');
+            }
+        }
+
+        btnGuideNext.addEventListener('click', () => {
+            if (currentGuidePage < maxGuidePages) {
+                currentGuidePage++;
+                updateGuideUI();
+            }
+        });
+        btnGuideBack.addEventListener('click', () => {
+            if (currentGuidePage > 1) {
+                currentGuidePage--;
+                updateGuideUI();
+            }
+        });
+        btnGuideStart.addEventListener('click', () => {
+            guideOverlay.classList.add('hidden');
+        });
+        btnOpenGuide.addEventListener('click', () => {
+            currentGuidePage = 1;
+            updateGuideUI();
+            guideOverlay.classList.remove('hidden');
+        });
+
+        // Console triggers
+        const btnOpenHub = document.getElementById('btn-open-hub');
+        const btnCloseHub = document.getElementById('btn-close-hub');
+        const globalHubModal = document.getElementById('global-hub-modal');
+
+        btnOpenHub.addEventListener('click', () => {
+            globalHubModal.classList.add('active');
+        });
+        btnCloseHub.addEventListener('click', () => {
+            globalHubModal.classList.remove('active');
+        });
+
+        // -------------------------------------------------------------
+        // 4. Load Immersive 3D PolyU Scene Geometry
+        // -------------------------------------------------------------
+        function initClassroomScene() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50);
+            camera.position.copy(playerPos);
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: false
+            });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+            scene.add(ambientLight);
+
+            // Ceiling Lights array mapping
+            const ceilingLightsConfig = [{
+                x: -3.5,
+                z: -3
+            }, {
+                x: 0,
+                z: -3
+            }, {
+                x: 3.5,
+                z: -3
+            }, {
+                x: -3.5,
+                z: 0
+            }, {
+                x: 0,
+                z: 0
+            }, {
+                x: 3.5,
+                z: 0
+            }, {
+                x: -3.5,
+                z: 3
+            }, {
+                x: 0,
+                z: 3
+            }, {
+                x: 3.5,
+                z: 3
+            }];
+
+            ceilingLightsConfig.forEach((pos) => {
+                const light = new THREE.PointLight(0xffffff, 0.5, 9);
+                light.position.set(pos.x, 3.4, pos.z);
+                light.castShadow = true;
+                scene.add(light);
+            });
+
+            // Realistic Yellowish Wood Floor
+            const floorGeo = new THREE.PlaneGeometry(12, 12);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0xdfb07a,
+                roughness: 0.45,
+                metalness: 0.05
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Black dark industrial ceiling
+            const ceilingGeo = new THREE.PlaneGeometry(12, 12);
+            const ceilingMat = new THREE.MeshStandardMaterial({
+                color: 0x121216,
+                roughness: 0.9
+            });
+            const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 3.5;
+            scene.add(ceiling);
+
+            // Square LED plates on ceiling
+            const bulbGeo = new THREE.PlaneGeometry(0.8, 0.8);
+            const bulbMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff
+            });
+            ceilingLightsConfig.forEach(pos => {
+                const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+                bulb.rotation.x = Math.PI / 2;
+                bulb.position.set(pos.x, 3.49, pos.z);
+                scene.add(bulb);
+            });
+
+            // -------------------------------------------------------------
+            // Walls Construction
+            // -------------------------------------------------------------
+            const leftWallGeo = new THREE.PlaneGeometry(12, 3.5);
+            const wallMat = new THREE.MeshStandardMaterial({
+                color: 0xe3e3d9,
+                roughness: 0.8
+            });
+            const leftWall = new THREE.Mesh(leftWallGeo, wallMat);
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.set(-6, 1.75, 0);
+            scene.add(leftWall);
+
+            const rightWall = new THREE.Mesh(leftWallGeo, wallMat);
+            rightWall.rotation.y = -Math.PI / 2;
+            rightWall.position.set(6, 1.75, 0);
+            scene.add(rightWall);
+
+            const frontWallGeo = new THREE.PlaneGeometry(12, 3.5);
+            const frontWall = new THREE.Mesh(frontWallGeo, wallMat);
+            frontWall.position.set(0, 1.75, -6);
+            scene.add(frontWall);
+
+            const backWall = new THREE.Mesh(frontWallGeo, new THREE.MeshStandardMaterial({
+                color: 0x1f2937,
+                roughness: 0.5
+            }));
+            backWall.rotation.y = Math.PI;
+            backWall.position.set(0, 1.75, 6);
+            scene.add(backWall);
+
+            // -------------------------------------------------------------
+            // SPACED CORNER LAYOUTS (Screens separated on Left of each Board)
+            // -------------------------------------------------------------
+
+            // CORNER 1 (Left Close): Coin Toss Binomial
+            // Spaced: Board Z = -4.3, Screen on left of board Z = -1.3 (3.0m Separation distance)
+            createWallWhiteboard(-5.96, 1.75, -4.3, Math.PI / 2, "Binomial Theory Formula");
+            createInteractiveLCD(-5.96, 1.8, -1.3, Math.PI / 2, 0);
+            createActiveDesk(-4.2, -2.8);
+            createChair(-5.2, -2.8, -Math.PI / 2);
+            createFloorSensorRing(-2.8, -2.8, 0x10b981, "Corner 1");
+            create3DInteractiveCoin(-4.4, 0.805, -2.8); // Rests flat on desk initially (Table height is 0.78 + offset)
+
+            // CORNER 2 (Left Far):Normal distribution
+            // Spaced: Board Z = 1.3, Screen on left Z = 4.3 (3.0m separation)
+            createWallWhiteboard(-5.96, 1.75, 1.3, Math.PI / 2, "Normal Distribution");
+            createInteractiveLCD(-5.96, 1.8, 4.3, Math.PI / 2, 1);
+            createActiveDesk(-4.2, 2.8);
+            createChair(-5.2, 2.8, -Math.PI / 2);
+            createFloorSensorRing(-2.8, 2.8, 0x3b82f6, "Corner 2");
+
+            // CORNER 3 (Right Close):Linear  Approximation
+            // Spaced: Board Z = -4.3, Screen on left of board Z = -1.3 (3.0m separation)
+            createWallWhiteboard(5.96, 1.75, -4.3, -Math.PI / 2, "Linear Approximation");
+            createInteractiveLCD(5.96, 1.8, -1.3, -Math.PI / 2, 2);
+            createActiveDesk(4.2, -2.8);
+            createChair(5.2, -2.8, Math.PI / 2);
+            createFloorSensorRing(2.8, -2.8, 0xef4444, "Corner 3");
+
+            // CORNER 4 (Right Far): Poisson Distribution
+            // Spaced: Board Z = 1.3, Screen on left Z = 4.3 (3.0m separation)
+            createWallWhiteboard(5.96, 1.75, 1.3, -Math.PI / 2, "Poisson Distribution");
+            createInteractiveLCD(5.96, 1.8, 4.3, -Math.PI / 2, 3);
+            createActiveDesk(4.2, 2.8);
+            createChair(5.2, 2.8, Math.PI / 2);
+            createFloorSensorRing(2.8, 2.8, 0xec4899, "Corner 4");
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        // -------------------------------------------------------------
+        // 5. 3D Model Building Utilities
+        // -------------------------------------------------------------
+        function createWallWhiteboard(x, y, z, rotY, titleText) {
+            const boardGroup = new THREE.Group();
+            boardGroup.position.set(x, y, z);
+            boardGroup.rotation.y = rotY;
+
+            const frameGeo = new THREE.BoxGeometry(2.1, 1.4, 0.04);
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: 0x94a3b8,
+                roughness: 0.3
+            });
+            const frame = new THREE.Mesh(frameGeo, frameMat);
+            boardGroup.add(frame);
+
+            const faceGeo = new THREE.PlaneGeometry(2.02, 1.32);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 320;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#fdfdfd';
+            ctx.fillRect(0, 0, 512, 320);
+
+            ctx.fillStyle = '#1e293b';
+            ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
+            ctx.fillText(titleText, 25, 45);
+
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(25, 60);
+            ctx.lineTo(487, 60);
+            ctx.stroke();
+
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 15px "Courier New"';
+            ctx.fillText("P(X = k) = (n! / (k!(n-k)!)) * p^k * (1-p)^(n-k)", 25, 100);
+
+            ctx.strokeStyle = '#2563eb';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(40, 280);
+            ctx.lineTo(450, 280);
+            ctx.moveTo(60, 280);
+            ctx.lineTo(60, 140);
+            ctx.stroke();
+
+            ctx.fillStyle = '#e11d48';
+            const barW = 15;
+            const heights = [20, 45, 80, 110, 125, 110, 80, 45, 20];
+            for (let i = 0; i < heights.length; i++) {
+                ctx.fillRect(90 + (i * 35), 280 - heights[i], barW, heights[i]);
+            }
+
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(90, 270);
+            ctx.bezierCurveTo(160, 250, 210, 145, 230, 145);
+            ctx.bezierCurveTo(250, 145, 300, 250, 370, 270);
+            ctx.stroke();
+
+            ctx.fillStyle = '#475569';
+            ctx.font = 'italic 12px "Segoe UI"';
+            ctx.fillText("Approaching Normal Bell curve for large n", 110, 305);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const faceMat = new THREE.MeshStandardMaterial({
+                map: texture,
+                roughness: 0.15
+            });
+            const face = new THREE.Mesh(faceGeo, faceMat);
+            face.position.z = 0.021;
+            boardGroup.add(face);
+
+            scene.add(boardGroup);
+        }
+
+        function createInteractiveLCD(x, y, z, rotY, index) {
+            const lcdGroup = new THREE.Group();
+            lcdGroup.position.set(x, y, z);
+            lcdGroup.rotation.y = rotY;
+
+            const frameGeo = new THREE.BoxGeometry(2.1, 1.3, 0.05);
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: 0x111113,
+                roughness: 0.5,
+                metalness: 0.8
+            });
+            const frame = new THREE.Mesh(frameGeo, frameMat);
+            lcdGroup.add(frame);
+
+            const screenGeo = new THREE.PlaneGeometry(2.02, 1.22);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 288;
+            lcdScreenContexts[index] = canvas.getContext('2d');
+
+            lcdScreenTextures[index] = new THREE.CanvasTexture(canvas);
+            const screenMat = new THREE.MeshBasicMaterial({
+                map: lcdScreenTextures[index]
+            });
+            const screen = new THREE.Mesh(screenGeo, screenMat);
+            screen.position.z = 0.026;
+            lcdGroup.add(screen);
+
+            scene.add(lcdGroup);
+            drawLCDByScreenIndex(index);
+        }
+
+        function drawLCDByScreenIndex(index) {
+            const ctx = lcdScreenContexts[index];
+            const isActive = wallLcdActiveStates[index];
+            if (!ctx) return;
+
+            if (!isActive) {
+                ctx.fillStyle = '#020204';
+                ctx.fillRect(0, 0, 512, 288);
+
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(256, 144, 25, -Math.PI / 3, Math.PI + Math.PI / 3);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(256, 110);
+                ctx.lineTo(256, 140);
+                ctx.stroke();
+
+                ctx.fillStyle = '#64748b';
+                ctx.font = 'bold 13px "Segoe UI", Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(`Screen ${index + 1} Standby. Walk into floor sensor circle.`, 256, 195);
+                ctx.textAlign = 'left';
+
+                lcdScreenTextures[index].needsUpdate = true;
+                return;
+            }
+
+            ctx.fillStyle = '#050508';
+            ctx.fillRect(0, 0, 512, 288);
+
+            ctx.strokeStyle = index === 0 ? '#10b981' : '#3b82f6';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(6, 6, 500, 276);
+
+            ctx.fillStyle = '#10b981';
+            ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
+            ctx.fillText(`Corner ${index + 1} Active Analysis Panel`, 25, 42);
+
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.2)';
+            ctx.fillRect(20, 55, 472, 2);
+
+            if (index === 0) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '14px monospace';
+                ctx.fillText(`Probability (P): ${coinP.toFixed(2)}`, 25, 85);
+                ctx.fillText(`Single Trial (N): ${binomialN}`, 25, 110);
+
+                ctx.fillStyle = '#fbbf24';
+                ctx.fillText(`Cumulative Heads (H): ${corner1Heads}`, 25, 145);
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillText(`Cumulative Tails (T): ${corner1Tails}`, 25, 170);
+
+                const total = corner1Heads + corner1Tails;
+                const ratio = total > 0 ? ((corner1Heads / total) * 100).toFixed(1) : "0.0";
+                ctx.fillStyle = '#f43f5e';
+                ctx.font = 'bold 18px monospace';
+                ctx.fillText(`Heads Ratio: ${ratio}%`, 25, 210);
+
+                ctx.fillStyle = '#090d16';
+                ctx.fillRect(285, 75, 200, 180);
+                ctx.strokeStyle = '#1e293b';
+                ctx.strokeRect(285, 75, 200, 180);
+
+                let maxVal = 1;
+                for (let i = 0; i <= binomialN; i++) {
+                    if ((binomialHistData[i] || 0) > maxVal) maxVal = binomialHistData[i];
+                }
+
+                const barW = 165 / (binomialN + 1);
+                ctx.fillStyle = '#10b981';
+                for (let i = 0; i <= binomialN; i++) {
+                    const count = binomialHistData[i] || 0;
+                    const pct = count / maxVal;
+                    const barH = pct * 130;
+                    ctx.fillRect(300 + (i * (barW + 2)), 230 - barH, barW, barH);
+                }
+
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '10px monospace';
+                ctx.fillText("0", 300, 245);
+                ctx.fillText(`${binomialN}`, 455, 245);
+                ctx.fillText("Outcome Distribution (K)", 315, 260);
+            } else {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '14px "Segoe UI", sans-serif';
+                ctx.fillText("Experiment: Auto-random stochastic simulations running", 25, 95);
+                ctx.fillText("Sensor Connection: Status Active", 25, 125);
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillText("Synthesizing dynamic Markov convergence path...", 25, 165);
+
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(280, 150);
+                for (let i = 0; i < 10; i++) {
+                    ctx.lineTo(280 + i * 20, 100 + Math.random() * 80);
+                }
+                ctx.stroke();
+            }
+
+            lcdScreenTextures[index].needsUpdate = true;
+        }
+
+        function createActiveDesk(x, z) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            const deskGeo = new THREE.CylinderGeometry(1.125, 1.125, 0.04, 6);
+            const deskMat = new THREE.MeshStandardMaterial({
+                color: 0xf5f5f4,
+                roughness: 0.35
+            });
+            const desk = new THREE.Mesh(deskGeo, deskMat);
+            desk.position.y = 0.78;
+            desk.castShadow = true;
+            group.add(desk);
+
+            const centerColGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.76);
+            const legMat = new THREE.MeshStandardMaterial({
+                color: 0x2d2d30,
+                roughness: 0.5,
+                metalness: 0.8
+            });
+            const centerCol = new THREE.Mesh(centerColGeo, legMat);
+            centerCol.position.y = 0.38;
+            group.add(centerCol);
+
+            const baseGeo = new THREE.BoxGeometry(0.85, 0.03, 0.85);
+            const base = new THREE.Mesh(baseGeo, legMat);
+            base.position.y = 0.015;
+            group.add(base);
+
+            scene.add(group);
+        }
+
+        function createChair(x, z, rotation) {
+            const chairGroup = new THREE.Group();
+            chairGroup.position.set(x, 0, z);
+            chairGroup.rotation.y = rotation;
+            const legOffsetX = 0.35;
+
+            const cushionGeo = new THREE.BoxGeometry(0.8, 0.1, 0.42);
+            const cushionMat = new THREE.MeshStandardMaterial({
+                color: 0x18181b,
+                roughness: 0.85
+            });
+            const cushion = new THREE.Mesh(cushionGeo, cushionMat);
+            cushion.position.y = 0.46;
+            chairGroup.add(cushion);
+
+            const backGeo = new THREE.BoxGeometry(0.8, 0.8, 0.07);
+            const back = new THREE.Mesh(backGeo, cushionMat);
+            back.position.set(0, 0.77, 0.19);
+            chairGroup.add(back);
+
+            const frameLegGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.46);
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: 0x3f3f46,
+                roughness: 0.5,
+                metalness: 0.7
+            });
+            const frameLocs = [
+                [-legOffsetX, 0.23, -0.18],
+                [legOffsetX, 0.23, -0.18],
+                [-legOffsetX, 0.23, 0.18],
+                [legOffsetX, 0.23, 0.18]
+            ];
+            frameLocs.forEach(pos => {
+                const leg = new THREE.Mesh(frameLegGeo, frameMat);
+                leg.position.set(pos[0], pos[1], pos[2]);
+                chairGroup.add(leg);
+            });
+
+            scene.add(chairGroup);
+        }
+
+        function createIpad(x, y, z) {
+
+        }
+
+        function create3DInteractiveCoin(x, y, z) {
+            const coinGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.02, 32);
+            const coinMat = new THREE.MeshStandardMaterial({
+                color: 0xd97706,
+                metalness: 0.95,
+                roughness: 0.08
+            });
+            corner1CoinMesh = new THREE.Mesh(coinGeo, coinMat);
+            corner1CoinMesh.rotation.x = Math.PI / 2;
+            corner1CoinMesh.position.set(x, y, z);
+            scene.add(corner1CoinMesh);
+
+            const edgeGeo = new THREE.TorusGeometry(0.2, 0.015, 8, 32);
+            const edgeMat = new THREE.MeshStandardMaterial({
+                color: 0xfbbf24,
+                metalness: 0.95
+            });
+            const edge = new THREE.Mesh(edgeGeo, edgeMat);
+            corner1CoinMesh.add(edge);
+        }
+
+        function createFloorSensorRing(x, z, ringColor, name) {
+            const sensorGroup = new THREE.Group();
+            sensorGroup.position.set(x, 0.01, z);
+
+            const ringGeo = new THREE.RingGeometry(0.75, 0.8, 32);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: ringColor,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.8
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            sensorGroup.add(ring);
+
+            const fillGeo = new THREE.RingGeometry(0.01, 0.75, 32);
+            const fillMat = new THREE.MeshBasicMaterial({
+                color: ringColor,
+                transparent: true,
+                opacity: 0.12,
+                side: THREE.DoubleSide
+            });
+            const fill = new THREE.Mesh(fillGeo, fillMat);
+            fill.rotation.x = Math.PI / 2;
+            sensorGroup.add(fill);
+
+            scene.add(sensorGroup);
+
+            sensorCircles.push({
+                name: name,
+                x: x,
+                z: z,
+                radius: 0.8,
+                group: sensorGroup
+            });
+        }
+
+        // -------------------------------------------------------------
+        // 6. Sensor Trigger Evaluations
+        // -------------------------------------------------------------
+        let activeCornerStationID = null;
+
+        function checkSensorCollision() {
+            let standingOnSensor = null;
+
+            for (let i = 0; i < sensorCircles.length; i++) {
+                const s = sensorCircles[i];
+                const dx = playerPos.x - s.x;
+                const dz = playerPos.z - s.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+
+                if (dist < s.radius) {
+                    standingOnSensor = s.name;
+                    s.group.scale.set(1.06, 1.06, 1.06);
+                } else {
+                    s.group.scale.set(1, 1, 1);
+                }
+            }
+
+            if (activeCornerStationID !== standingOnSensor) {
+                activeCornerStationID = standingOnSensor;
+                onStationTransitionChange(activeCornerStationID);
+            }
+        }
+
+        function onStationTransitionChange(stationID) {
+            const stationNameLabel = document.getElementById('current-station-name');
+            const floatingActionHud = document.getElementById('floating-action-hud');
+
+            for (let i = 0; i < 4; i++) {
+                wallLcdActiveStates[i] = false;
+            }
+
+            if (stationID === "Corner 1") {
+                wallLcdActiveStates[0] = true;
+                stationNameLabel.innerText = "Corner 1 (Coin Toss)";
+                stationNameLabel.className = "font-bold text-emerald-400";
+                floatingActionHud.style.display = "block"; // Turn on floating button
+            } else if (stationID === "Corner 2") {
+                wallLcdActiveStates[1] = true;
+                stationNameLabel.innerText = "Corner 2 (Stochastic)";
+                stationNameLabel.className = "font-bold text-blue-400";
+                floatingActionHud.style.display = "none";
+            } else if (stationID === "Corner 3") {
+                wallLcdActiveStates[2] = true;
+                stationNameLabel.innerText = "Corner 3 (Normal)";
+                stationNameLabel.className = "font-bold text-red-400";
+                floatingActionHud.style.display = "none";
+            } else if (stationID === "Corner 4") {
+                wallLcdActiveStates[3] = true;
+                stationNameLabel.innerText = "Corner 4 (Markov)";
+                stationNameLabel.className = "font-bold text-pink-400";
+                floatingActionHud.style.display = "none";
+            } else {
+                stationNameLabel.innerText = "Not Active";
+                stationNameLabel.className = "font-bold text-amber-400";
+                floatingActionHud.style.display = "none";
+            }
+
+            for (let i = 0; i < 4; i++) {
+                drawLCDByScreenIndex(i);
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 7. Coin Flipping Physics Animation (Launches upwards and back flat)
+        // -------------------------------------------------------------
+        function triggerCorner1CoinFlip() {
+            if (isCoinFlipping || !wallLcdActiveStates[0]) return;
+            isCoinFlipping = true;
+
+            const isHeads = Math.random() < coinP;
+            const targetRotX = isHeads ? Math.PI / 2 : -Math.PI / 2;
+            const spins = (Math.floor(Math.random() * 3) + 4) * Math.PI * 2;
+
+            const startY = 0.805; // Resting flat on the table
+            const peakY = 1.7; // Flip trajectory peak height
+
+            const startTime = performance.now();
+            const flipDuration = 950;
+
+            function animateFlip(time) {
+                const elapsed = time - startTime;
+                const progress = elapsed / flipDuration;
+
+                if (progress < 1) {
+                    const curY = startY + (peakY - startY) * (1 - Math.pow(progress * 2 - 1, 2));
+                    corner1CoinMesh.position.y = curY;
+
+                    corner1CoinMesh.rotation.x = (progress * spins) + (isHeads ? Math.PI / 2 : -Math.PI / 2);
+                    corner1CoinMesh.rotation.y = progress * Math.PI;
+
+                    requestAnimationFrame(animateFlip);
+                } else {
+                    // Back flat on table
+                    corner1CoinMesh.position.y = startY;
+                    corner1CoinMesh.rotation.set(targetRotX, 0, 0);
+                    isCoinFlipping = false;
+
+                    if (isHeads) {
+                        corner1Heads++;
+                    } else {
+                        corner1Tails++;
+                    }
+
+                    const trialsResult = simulateSingleTrial(binomialN, coinP);
+                    binomialHistData[trialsResult] = (binomialHistData[trialsResult] || 0) + 1;
+
+                    document.getElementById('hub-flip-count').innerText = `${corner1Heads + corner1Tails} flips`;
+                    drawLCDByScreenIndex(0);
+                }
+            }
+            requestAnimationFrame(animateFlip);
+        }
+
+        function simulateSingleTrial(n, p) {
+            let heads = 0;
+            for (let i = 0; i < n; i++) {
+                if (Math.random() < p) heads++;
+            }
+            return heads;
+        }
+
+        function runBatchTosses(count) {
+            if (!wallLcdActiveStates[0]) return;
+
+            for (let i = 0; i < count; i++) {
+                const headsResult = simulateSingleTrial(binomialN, coinP);
+                binomialHistData[headsResult] = (binomialHistData[headsResult] || 0) + 1;
+
+                corner1Heads += headsResult;
+                corner1Tails += (binomialN - headsResult);
+            }
+
+            document.getElementById('hub-flip-count').innerText = `${corner1Heads + corner1Tails} flips`;
+            drawLCDByScreenIndex(0);
+        }
+
+        // -------------------------------------------------------------
+        // 8. Navigation Controls & Smooth Zooms
+        // -------------------------------------------------------------
+        document.getElementById('btn-zoom-in').addEventListener('click', () => {
+            targetFov = Math.max(25, targetFov - 8);
+        });
+        document.getElementById('btn-zoom-out').addEventListener('click', () => {
+            targetFov = Math.min(85, targetFov + 8);
+        });
+
+        // Joystick event binds
+        joystickContainer.addEventListener('mousedown', startJoystickMove);
+        joystickContainer.addEventListener('touchstart', startJoystickMove, {
+            passive: false
+        });
+
+        function startJoystickMove(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            isUsingJoystick = true;
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            const rect = joystickContainer.getBoundingClientRect();
+            joystickStartPos.x = rect.left + rect.width / 2;
+            joystickStartPos.y = rect.top + rect.height / 2;
+
+            document.addEventListener('mousemove', handleJoystickMove);
+            document.addEventListener('touchmove', handleJoystickMove, {
+                passive: false
+            });
+            document.addEventListener('mouseup', stopJoystickMove);
+            document.addEventListener('touchend', stopJoystickMove);
+        }
+
+        function handleJoystickMove(e) {
+            if (!isUsingJoystick) return;
+            e.preventDefault();
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            let deltaX = clientX - joystickStartPos.x;
+            let deltaY = clientY - joystickStartPos.y;
+
+            const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            if (dist > maxJoystickRadius) {
+                deltaX = (deltaX / dist) * maxJoystickRadius;
+                deltaY = (deltaY / dist) * maxJoystickRadius;
+            }
+
+            joystickKnob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+            joystickMove.x = deltaX / maxJoystickRadius;
+            joystickMove.y = deltaY / maxJoystickRadius;
+        }
+
+        function stopJoystickMove() {
+            isUsingJoystick = false;
+            joystickMove = {
+                x: 0,
+                y: 0
+            };
+            joystickKnob.style.transform = 'translate(0px, 0px)';
+
+            document.removeEventListener('mousemove', handleJoystickMove);
+            document.removeEventListener('touchmove', handleJoystickMove);
+            document.removeEventListener('mouseup', stopJoystickMove);
+            document.removeEventListener('touchend', stopJoystickMove);
+        }
+
+        // Camera Look drags
+        window.addEventListener('mousedown', onMouseDownView);
+        window.addEventListener('touchstart', onTouchStartView, {
+            passive: true
+        });
+
+        function onMouseDownView(e) {
+            if (e.target.closest('#joystick-container') || e.target.closest('#btn-open-guide') || e.target.closest('#btn-open-hub') || e.target.closest('#user-guide-overlay') || e.target.closest('#global-hub-modal') || e.target.closest('#btn-zoom-in') || e.target.closest('#btn-zoom-out') || e.target.closest('#floating-action-hud')) {
+                return;
+            }
+            isDraggingView = true;
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+
+            window.addEventListener('mousemove', onMouseMoveView);
+            window.addEventListener('mouseup', onMouseUpView);
+        }
+
+        function onMouseMoveView(e) {
+            if (!isDraggingView) return;
+            const dx = e.clientX - previousMouseX;
+            const dy = e.clientY - previousMouseY;
+
+            targetLookYaw -= dx * lookSpeed;
+            targetLookPitch -= dy * lookSpeed;
+            targetLookPitch = Math.max(-Math.PI / 3.3, Math.min(Math.PI / 3.3, targetLookPitch));
+
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+        }
+
+        function onMouseUpView() {
+            isDraggingView = false;
+            window.removeEventListener('mousemove', onMouseMoveView);
+            window.removeEventListener('mouseup', onMouseUpView);
+        }
+
+        function onTouchStartView(e) {
+            if (e.touches.length !== 1) return;
+            const t = e.touches[0];
+            if (t.target.closest('#joystick-container') || t.target.closest('#btn-open-guide') || t.target.closest('#btn-open-hub') || t.target.closest('#user-guide-overlay') || t.target.closest('#global-hub-modal') || t.target.closest('#btn-zoom-in') || t.target.closest('#btn-zoom-out') || t.target.closest('#floating-action-hud')) {
+                return;
+            }
+            isDraggingView = true;
+            previousMouseX = t.clientX;
+            previousMouseY = t.clientY;
+
+            window.addEventListener('touchmove', onTouchMoveView, {
+                passive: true
+            });
+            window.addEventListener('touchend', onTouchEndView);
+        }
+
+        function onTouchMoveView(e) {
+            if (!isDraggingView || e.touches.length !== 1) return;
+            const t = e.touches[0];
+            const dx = t.clientX - previousMouseX;
+            const dy = t.clientY - previousMouseY;
+
+            targetLookYaw -= dx * lookSpeed;
+            targetLookPitch -= dy * lookSpeed;
+            targetLookPitch = Math.max(-Math.PI / 3.3, Math.min(Math.PI / 3.3, targetLookPitch));
+
+            previousMouseX = t.clientX;
+            previousMouseY = t.clientY;
+        }
+
+        // Project 3D coordinate to screen space coordinates for HUD overlays
+        const projectionVec = new THREE.Vector3();
+
+        function update3DOverlaysProjection() {
+            const hudElement = document.getElementById('floating-action-hud');
+            if (activeCornerStationID === "Corner 1" && corner1CoinMesh) {
+                projectionVec.copy(corner1CoinMesh.position);
+                projectionVec.y += 0.35; // Hover label slightly above coin
+                projectionVec.project(camera);
+
+                // Convert projection space (-1 to 1) to screen space px coordinates
+                const x = (projectionVec.x * .5 + .5) * window.innerWidth;
+                const y = (projectionVec.y * -.5 + .5) * window.innerHeight;
+
+                // Set styles dynamically
+                hudElement.style.left = `${x}px`;
+                hudElement.style.top = `${y}px`;
+                hudElement.style.transform = `translate(-50%, -100%)`;
+            }
+        }
+
+        function onTouchEndView() {
+            isDraggingView = false;
+            window.removeEventListener('touchmove', onTouchMoveView);
+            window.removeEventListener('touchend', onTouchEndView);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            keysPressed[e.key.toLowerCase()] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            keysPressed[e.key.toLowerCase()] = false;
+        });
+
+        // -------------------------------------------------------------
+        // 9. Position Updates and Active Main Simulation Frame Loops
+        // -------------------------------------------------------------
+        function applyMovementPhysics() {
+            const moveVec = new THREE.Vector3(0, 0, 0);
+
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            forward.y = 0;
+            forward.normalize();
+
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            right.y = 0;
+            right.normalize();
+
+            if (keysPressed['w']) moveVec.addScaledVector(forward, 1);
+            if (keysPressed['s']) moveVec.addScaledVector(forward, -1);
+            if (keysPressed['a']) moveVec.addScaledVector(right, -1);
+            if (keysPressed['d']) moveVec.addScaledVector(right, 1);
+
+            if (isUsingJoystick && (joystickMove.x !== 0 || joystickMove.y !== 0)) {
+                moveVec.addScaledVector(forward, -joystickMove.y);
+                moveVec.addScaledVector(right, joystickMove.x);
+            }
+
+            if (moveVec.lengthSq() > 0) {
+                moveVec.normalize();
+                playerPos.addScaledVector(moveVec, playerWalkSpeed);
+
+                playerPos.x = Math.max(-5.2, Math.min(5.2, playerPos.x));
+                playerPos.z = Math.max(-5.2, Math.min(5.2, playerPos.z));
+            }
+
+            document.getElementById('player-coord-text').innerText = `X: ${playerPos.x.toFixed(1)}, Z: ${playerPos.z.toFixed(1)}`;
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            lookYaw += (targetLookYaw - lookYaw) * 0.15;
+            lookPitch += (targetLookPitch - lookPitch) * 0.15;
+
+            const q = new THREE.Quaternion();
+            const euler = new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ');
+            q.setFromEuler(euler);
+            camera.quaternion.copy(q);
+
+            camera.fov += (targetFov - camera.fov) * 0.15;
+            camera.updateProjectionMatrix();
+
+            applyMovementPhysics();
+            camera.position.copy(playerPos);
+
+            checkSensorCollision();
+            update3DOverlaysProjection();
+
+            // Rotates gold coin slowly only when not actively launched
+            if (corner1CoinMesh && !isCoinFlipping) {
+                corner1CoinMesh.rotation.z += 0.007;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // -------------------------------------------------------------
+        // 10. Document Initialization entry point
+        // -------------------------------------------------------------
+        window.onload = function() {
+            initDataStructure();
+            initClassroomScene();
+            animate();
+
+            document.getElementById('btn-station-flip').addEventListener('click', triggerCorner1CoinFlip);
+
+            const inputN = document.getElementById('input-n-value');
+            inputN.addEventListener('input', (e) => {
+                binomialN = parseInt(e.target.value);
+                document.getElementById('label-n-val').innerText = `${binomialN} times`;
+                initDataStructure();
+                drawLCDByScreenIndex(0);
+            });
+
+            const inputP = document.getElementById('input-p-value');
+            inputP.addEventListener('input', (e) => {
+                coinP = parseFloat(e.target.value);
+                document.getElementById('label-p-val').innerText = coinP.toFixed(2);
+                initDataStructure();
+                drawLCDByScreenIndex(0);
+            });
+
+            // Project clicking coordinates onto the 3D coin Mesh
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            window.addEventListener('click', (e) => {
+                if (e.target.closest('#joystick-container') || e.target.closest('#btn-open-guide') || e.target.closest('#btn-open-hub') || e.target.closest('#user-guide-overlay') || e.target.closest('#global-hub-modal') || e.target.closest('#btn-zoom-in') || e.target.closest('#btn-zoom-out') || e.target.closest('#floating-action-hud')) {
+                    return;
+                }
+
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(scene.children, true);
+
+                for (let i = 0; i < intersects.length; i++) {
+                    const obj = intersects[i].object;
+                    if (obj === corner1CoinMesh || obj.parent === corner1CoinMesh) {
+                        triggerCorner1CoinFlip();
+                        break;
+                    }
+                }
+            });
+
+            document.getElementById('btn-reset-globals').addEventListener('click', () => {
+                corner1Heads = 0;
+                corner1Tails = 0;
+                document.getElementById('hub-flip-count').innerText = "0 flips";
+                initDataStructure();
+                drawLCDByScreenIndex(0);
+            });
+        };
+    </script>
+</body>
+
+</html>
