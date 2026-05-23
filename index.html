@@ -470,18 +470,40 @@
                 scene.add(light);
             });
 
-            // Realistic Yellowish Wood Floor
-            const floorGeo = new THREE.PlaneGeometry(12, 12);
+            // 條紋地板：木色 + 黑色間條，大細 10 (X) x 22 (Z)
+            const floorWidth = 10;
+            const floorDepth = 22;
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#dfb07a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#2e2e2c';
+            const stripeWidth = 250;
+            const gap = 490;
+            for (let x = 0; x < canvas.width; x += gap) {
+                ctx.fillRect(x, 0, stripeWidth, canvas.height);
+            }
+
+            const stripeTexture = new THREE.CanvasTexture(canvas);
+            stripeTexture.wrapS = THREE.RepeatWrapping;
+            stripeTexture.wrapT = THREE.RepeatWrapping;
+            stripeTexture.repeat.set(floorWidth / 1.5, floorDepth / 1.5);
+
+            const floorGeo = new THREE.PlaneGeometry(floorWidth, floorDepth);
             const floorMat = new THREE.MeshStandardMaterial({
-                color: 0xdfb07a,
+                map: stripeTexture,
                 roughness: 0.45,
-                metalness: 0.05
+                metalness: 0.05,
+                color: 0xffffff
             });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
             floor.position.y = 0;
             floor.receiveShadow = true;
             scene.add(floor);
+
 
             // Black dark industrial ceiling
             const ceilingGeo = new THREE.PlaneGeometry(12, 12);
